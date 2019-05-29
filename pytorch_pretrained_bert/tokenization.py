@@ -105,13 +105,13 @@ class BertTokenizer(object):
         self.max_len = max_len if max_len is not None else int(1e12)
 
     def tokenize(self, text):
+        split_tokens = []
         if self.do_basic_tokenize:
-          split_tokens = []
-          for token in self.basic_tokenizer.tokenize(text):
-              for sub_token in self.wordpiece_tokenizer.tokenize(token):
-                  split_tokens.append(sub_token)
+            for token in self.basic_tokenizer.tokenize(text):
+                for sub_token in self.wordpiece_tokenizer.tokenize(token):
+                    split_tokens.append(sub_token)
         else:
-          split_tokens = self.wordpiece_tokenizer.tokenize(text)
+            split_tokens = self.wordpiece_tokenizer.tokenize(text)
         return split_tokens
 
     def convert_tokens_to_ids(self, tokens):
@@ -134,6 +134,21 @@ class BertTokenizer(object):
             tokens.append(self.ids_to_tokens[i])
         return tokens
 
+    def save_vocabulary(self, vocab_path):
+        """Save the tokenizer vocabulary to a directory or file."""
+        index = 0
+        if os.path.isdir(vocab_path):
+            vocab_file = os.path.join(vocab_path, VOCAB_NAME)
+        with open(vocab_file, "w", encoding="utf-8") as writer:
+            for token, token_index in sorted(self.vocab.items(), key=lambda kv: kv[1]):
+                if index != token_index:
+                    logger.warning("Saving vocabulary to {}: vocabulary indices are not consecutive."
+                                   " Please check that the vocabulary is not corrupted!".format(vocab_file))
+                    index = token_index
+                writer.write(token + u'\n')
+                index += 1
+        return vocab_file
+
     @classmethod
     def from_pretrained(cls, pretrained_model_name_or_path, cache_dir=None, *inputs, **kwargs):
         """
@@ -142,6 +157,16 @@ class BertTokenizer(object):
         """
         if pretrained_model_name_or_path in PRETRAINED_VOCAB_ARCHIVE_MAP:
             vocab_file = PRETRAINED_VOCAB_ARCHIVE_MAP[pretrained_model_name_or_path]
+            if '-cased' in pretrained_model_name_or_path and kwargs.get('do_lower_case', True):
+                logger.warning("The pre-trained model you are loading is a cased model but you have not set "
+                               "`do_lower_case` to False. We are setting `do_lower_case=False` for you but "
+                               "you may want to check this behavior.")
+                kwargs['do_lower_case'] = False
+            elif '-cased' not in pretrained_model_name_or_path and not kwargs.get('do_lower_case', True):
+                logger.warning("The pre-trained model you are loading is an uncased model but you have set "
+                               "`do_lower_case` to False. We are setting `do_lower_case=True` for you "
+                               "but you may want to check this behavior.")
+                kwargs['do_lower_case'] = True
         else:
             vocab_file = pretrained_model_name_or_path
         if os.path.isdir(vocab_file):
